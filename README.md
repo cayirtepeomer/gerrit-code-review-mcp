@@ -1,5 +1,7 @@
 # Gerrit Review MCP Server
 
+[![smithery badge](https://smithery.ai/badge/@cayirtepeomer/gerrit-code-review-mcp)](https://smithery.ai/server/@cayirtepeomer/gerrit-code-review-mcp)
+
 This MCP server provides integration with Gerrit code review system, allowing AI assistants to review code changes and their details through a simple interface.
 
 ## Features
@@ -59,6 +61,15 @@ file_diff = fetch_patchset_diff("23824", "1", "2", "path/to/file.swift")
 
 ## Installation
 
+### Installing via Smithery
+
+To install gerrit-code-review-mcp for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@cayirtepeomer/gerrit-code-review-mcp):
+
+```bash
+npx -y @smithery/cli install @cayirtepeomer/gerrit-code-review-mcp --client claude
+```
+
+### Manual Installation
 1. Clone this repository:
 ```bash
 git clone <repository-url>
