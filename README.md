@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/cayirtepeomer-gerrit-code-review-mcp-badge.png)](https://mseep.ai/app/cayirtepeomer-gerrit-code-review-mcp)
+
 # Gerrit Review MCP Server
 
 [![smithery badge](https://smithery.ai/badge/@cayirtepeomer/gerrit-code-review-mcp)](https://smithery.ai/server/@cayirtepeomer/gerrit-code-review-mcp)
