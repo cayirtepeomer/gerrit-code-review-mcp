@@ -99,6 +99,7 @@ pip install -e .
 export GERRIT_HOST="gerrit.example.com"  # Your Gerrit server hostname
 export GERRIT_USER="your-username"       # Your Gerrit username
 export GERRIT_HTTP_PASSWORD="your-http-password"  # Your Gerrit HTTP password
+export GERRIT_EXCLUDED_PATTERNS="\.pbxproj$,\.xcworkspace$,node_modules/"  # Optional: files to exclude
 ```
 
 Or create a `.env` file:
@@ -106,6 +107,7 @@ Or create a `.env` file:
 GERRIT_HOST=gerrit.example.com
 GERRIT_USER=your-username
 GERRIT_HTTP_PASSWORD=your-http-password
+GERRIT_EXCLUDED_PATTERNS=\.pbxproj$,\.xcworkspace$,node_modules/
 ```
 
 2. Generate HTTP password:
@@ -113,6 +115,12 @@ GERRIT_HTTP_PASSWORD=your-http-password
 - Go to Settings > HTTP Credentials
 - Generate new password
 - Copy the password to your environment or .env file
+
+3. Configure file exclusions (optional):
+- Set `GERRIT_EXCLUDED_PATTERNS` to exclude specific file types from change reviews
+- Use comma-separated regex patterns (e.g., `\.pbxproj$,\.xcworkspace$,node_modules/`)
+- Leave empty or unset to use default exclusions
+- This helps prevent infinite loops with large files
 
 ## MCP Configuration
 

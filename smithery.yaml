@@ -19,11 +19,25 @@ startCommand:
         type: string
         default: ""
         description: Gerrit HTTP password (optional)
+      gerritExcludedPatterns:
+        type: string
+        default: ""
+        description: Comma-separated regex patterns for files to exclude from change reviews (optional)
   commandFunction:
     # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
     |-
-    (config) => ({ command: 'python', args: ['server.py'], env: { GERRIT_HOST: config.gerritHost, GERRIT_USER: config.gerritUser, GERRIT_HTTP_PASSWORD: config.gerritHttpPassword } })
+    (config) => ({ 
+      command: 'python', 
+      args: ['server.py'], 
+      env: { 
+        GERRIT_HOST: config.gerritHost, 
+        GERRIT_USER: config.gerritUser, 
+        GERRIT_HTTP_PASSWORD: config.gerritHttpPassword,
+        GERRIT_EXCLUDED_PATTERNS: config.gerritExcludedPatterns || ""
+      } 
+    })
   exampleConfig:
     gerritHost: gerrit.example.com
     gerritUser: reviewbot
     gerritHttpPassword: s3cret
+    gerritExcludedPatterns: "\.pbxproj$,\.xcworkspace$,node_modules/"
