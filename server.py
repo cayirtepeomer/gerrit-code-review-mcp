@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import re
 from typing import Optional, Dict, Any, Union
 from dataclasses import dataclass
 from contextlib import asynccontextmanager
@@ -148,10 +149,41 @@ def fetch_gerrit_change(ctx: Context, change_id: str, patchset_number: str = Non
 
     revision_info = revisions[target_revision]
     
-    # Process each file
+    # Process each file with configurable filtering
     processed_files = []
+    excluded_files = []
+    
+    # Get exclusion patterns from environment or use defaults
+    excluded_patterns_str = os.getenv("GERRIT_EXCLUDED_PATTERNS", "")
+    if excluded_patterns_str:
+        excluded_patterns = [pattern.strip() for pattern in excluded_patterns_str.split(",") if pattern.strip()]
+    else:
+        excluded_patterns = []
+    
     for file_path, file_info in revision_info.get("files", {}).items():
         if file_path == "/COMMIT_MSG":
+            continue
+        
+        # Check if file should be excluded based on patterns only
+        should_exclude = False
+        exclude_reason = ""
+        
+        # Check for excluded patterns
+        for pattern in excluded_patterns:
+            if re.search(pattern, file_path):
+                should_exclude = True
+                exclude_reason = f"Excluded pattern: {pattern}"
+                break
+        
+        if should_exclude:
+            excluded_files.append({
+                "path": file_path,
+                "status": file_info.get("status", "MODIFIED"),
+                "lines_inserted": file_info.get("lines_inserted", 0),
+                "lines_deleted": file_info.get("lines_deleted", 0),
+                "size_delta": file_info.get("size_delta", 0),
+                "exclude_reason": exclude_reason
+            })
             continue
             
         # Get the diff for this file
@@ -170,13 +202,19 @@ def fetch_gerrit_change(ctx: Context, change_id: str, patchset_number: str = Non
         processed_files.append(file_data)
     
     # Return the complete change information
-    return {
+    result = {
         "change_info": change_info,
         "project": project,
         "revision": target_revision,
         "patchset": revision_info,
         "files": processed_files
     }
+    
+    if excluded_files:
+        result["excluded_large_files"] = excluded_files
+        result["_note"] = f"Excluded {len(excluded_files)} large files to prevent infinite loops. Use fetch_patchset_diff for specific large files."
+    
+    return result
 
 @mcp.tool()
 def fetch_patchset_diff(ctx: Context, change_id: str, base_patchset: str, target_patchset: str, file_path: Optional[str] = None) -> Dict[str, Any]:
