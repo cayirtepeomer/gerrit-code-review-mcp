@@ -38,4 +38,7 @@ ENV/
 Thumbs.db
 
 # Project specific
-*.log 
+*.log
+
+# Testing
+.pytest_cache/
