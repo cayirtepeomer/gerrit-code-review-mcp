@@ -1,193 +1,195 @@
-# Gerrit Code Review MCP Server for RooCode
+# Gerrit Review MCP Server
 
-This directory contains the Gerrit Code Review MCP Server installation for RooCode. This MCP server provides integration with Gerrit code review systems, allowing AI assistants to review code changes and their details.
+[![smithery badge](https://smithery.ai/badge/@cayirtepeomer/gerrit-code-review-mcp)](https://smithery.ai/server/@cayirtepeomer/gerrit-code-review-mcp)
+
+This MCP server provides integration with Gerrit code review system, allowing AI assistants to review code changes and their details through a simple interface.
 
 ## Features
 
-- **Fetch Change Details**: Extract and display complete change information including files and patch sets
-- **Compare Patch Set Differences**: Analyze differences between two or more patch sets
-- **Integration Capabilities**: Seamlessly integrate with mainstream code review tools and CI/CD pipelines
+The server provides a streamlined toolset for code review:
 
-## Installation Status
+### Fetch Change Details
+```python
+fetch_gerrit_change(change_id: str, patchset_number: Optional[str] = None)
+```
+- Fetches complete change information including files and patch sets
+- Shows detailed diff information for each modified file
+- Displays file changes, insertions, and deletions
+- Supports reviewing specific patch sets
+- Returns comprehensive change details including:
+  - Project and branch information
+  - Author and reviewer details
+  - Comments and review history
+  - File modifications with diff content
+  - Current patch set information
 
-✅ **Installed and Configured**
+### Compare Patchset Differences
+```python
+fetch_patchset_diff(change_id: str, base_patchset: str, target_patchset: str, file_path: Optional[str] = None)
+```
+- Compare differences between two patchsets of a change
+- View specific file differences or all changed files
+- Analyze code modifications across patchset versions
+- Track evolution of changes through review iterations
 
-The MCP server has been successfully:
-- Cloned from the official repository
-- Built as a Docker image (`gerrit-code-review-mcp`)
-- Configured for RooCode integration
-- Set up with proper environment templates
+### Example Usage
+
+Review a complete change:
+```python
+# Fetch latest patchset of change 23824
+change = fetch_gerrit_change("23824")
+```
+
+Compare specific patchsets:
+```python
+# Compare differences between patchsets 1 and 2 for change 23824
+diff = fetch_patchset_diff("23824", "1", "2")
+```
+
+View specific file changes:
+```python
+# Get diff for a specific file between patchsets
+file_diff = fetch_patchset_diff("23824", "1", "2", "path/to/file.swift")
+```
+
+## Prerequisites
+
+- Python 3.10 or higher (Python 3.11 recommended)
+- Gerrit HTTP access credentials
+- HTTP password generated from Gerrit settings
+- Access to the `mcp[cli]` package repository (private package)
+
+## Installation
+
+### Installing via Smithery
+
+To install gerrit-code-review-mcp for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@cayirtepeomer/gerrit-code-review-mcp):
+
+```bash
+npx -y @smithery/cli install @cayirtepeomer/gerrit-code-review-mcp --client claude
+```
+
+### Manual Installation
+1. Clone this repository:
+```bash
+git clone <repository-url>
+cd gerrit-review-mcp
+```
+
+2. Create and activate a virtual environment:
+```bash
+# For macOS/Linux:
+python -m venv .venv
+source .venv/bin/activate
+
+# For Windows:
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+3. Install this package in editable mode with its dependencies:
+```bash
+pip install -e .
+```
 
 ## Configuration
 
-### 1. Environment Setup
-
-Copy the environment template and configure your Gerrit settings:
-
+1. Set up environment variables:
 ```bash
-cd /home/atmp/data/dev-tools-1/mcp/gerrit
-cp .env.template .env
+export GERRIT_HOST="gerrit.example.com"  # Your Gerrit server hostname (without https://)
+export GERRIT_USER="your-username"       # Your Gerrit account username
+export GERRIT_HTTP_PASSWORD="your-http-password"  # Generated HTTP password from Gerrit Settings > HTTP Credentials
+export GERRIT_EXCLUDED_PATTERNS="\.pbxproj$,\.xcworkspace$,node_modules/"  # Optional: regex patterns for files to exclude from reviews
 ```
 
-Edit the `.env` file with your actual Gerrit server details:
-
-```bash
-# Your Gerrit server hostname (without https://)
-GERRIT_HOST=your-gerrit-server.com
-
-# Your Gerrit username
+Or create a `.env` file:
+```
+GERRIT_HOST=gerrit.example.com
 GERRIT_USER=your-username
-
-# Your Gerrit HTTP password (generate from Settings > HTTP Credentials)
 GERRIT_HTTP_PASSWORD=your-http-password
-
-# Optional: File patterns to exclude from reviews
-GERRIT_EXCLUDED_PATTERNS=\.pbxproj$,\.xcworkspace$,node_modules/,\.lock$
+GERRIT_EXCLUDED_PATTERNS=\.pbxproj$,\.xcworkspace$,node_modules/
 ```
 
-### 2. Generate Gerrit HTTP Password
+2. Generate HTTP password:
+- Log into your Gerrit web interface
+- Go to Settings > HTTP Credentials
+- Generate new password
+- Copy the password to your environment or .env file
 
-1. Log into your Gerrit web interface
-2. Go to **Settings > HTTP Credentials**
-3. Generate a new password
-4. Copy the password to your `.env` file
+3. Configure file exclusions (optional):
+- Set `GERRIT_EXCLUDED_PATTERNS` to exclude specific file types from change reviews
+- Use comma-separated regex patterns (e.g., `\.pbxproj$,\.xcworkspace$,node_modules/`)
+- Leave empty or unset to use default exclusions
+- This helps prevent infinite loops with large files
 
-### 3. MCP Server Configuration
+## MCP Configuration
 
-The MCP server is configured to run via Docker with the following configuration:
+To use this MCP server with Cursor or RooCode, you need to add its configuration to your `~/.cursor/mcp.json` or `.roo/mcp.json` file. Here's the required configuration:
 
 ```json
 {
   "mcpServers": {
-    "gerrit-code-review-mcp": {
-      "command": "docker",
+    "gerrit-review-mcp": {
+      "command": "/path/to/your/workspace/gerrit-code-review-mcp/.venv/bin/python",
       "args": [
-        "run", "--rm", "-i",
-        "--env-file", "/home/atmp/data/dev-tools-1/mcp/gerrit/.env",
-        "gerrit-code-review-mcp"
+        "/path/to/your/workspace/gerrit-code-review-mcp/server.py",
+        "--transport",
+        "stdio"
       ],
-      "cwd": "/home/atmp/data/dev-tools-1/mcp/gerrit",
+      "cwd": "/path/to/your/workspace/gerrit-code-review-mcp",
+      "env": {
+        "PYTHONPATH": "/path/to/your/workspace/gerrit-code-review-mcp",
+        "VIRTUAL_ENV": "/path/to/your/workspace/gerrit-code-review-mcp/.venv",
+        "PATH": "/path/to/your/workspace/gerrit-code-review-mcp/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+      },
       "stdio": true
     }
   }
 }
 ```
 
-## Usage
+Replace `/path/to/your/workspace` with your actual workspace path. For example, if your project is in `/Users/username/projects/gerrit-code-review-mcp`, use that path instead.
 
-### Starting the Server
+Make sure all paths in the configuration point to:
+- Your virtual environment's Python interpreter
+- The project's `server.py` file
+- The correct working directory
+- The virtual environment's bin directory in the PATH
 
-Use the provided startup script:
+## Implementation Details
 
-```bash
-cd /home/atmp/data/dev-tools-1/mcp/gerrit
-./start-server.sh
-```
-
-The script will:
-- Check if the `.env` file exists
-- Verify the Docker image is available
-- Start the MCP server with proper configuration
-
-### Available Tools
-
-Once connected, the MCP server provides these tools:
-
-#### `fetch_gerrit_change`
-```python
-fetch_gerrit_change(change_id: str, patchset_number: Optional[str] = None)
-```
-- Fetches complete change information including files and patch sets
-- Shows detailed diff information for each modified file
-- Supports reviewing specific patch sets
-
-#### `fetch_patchset_diff`
-```python
-fetch_patchset_diff(change_id: str, base_patchset: str, target_patchset: str, file_path: Optional[str] = None)
-```
-- Compare differences between two patchsets of a change
-- View specific file differences or all changed files
-- Track evolution of changes through review iterations
-
-### Example Usage
-
-```python
-# Fetch latest patchset of change 23824
-change = fetch_gerrit_change("23824")
-
-# Compare differences between patchsets 1 and 2
-diff = fetch_patchset_diff("23824", "1", "2")
-
-# Get diff for a specific file between patchsets
-file_diff = fetch_patchset_diff("23824", "1", "2", "path/to/file.swift")
-```
+The server uses Gerrit REST API to interact with Gerrit, providing:
+- Fast and reliable change information retrieval
+- Secure authentication using HTTP digest auth
+- Support for various Gerrit REST endpoints
+- Clean and maintainable codebase
+- HTTPS encryption for secure communication
 
 ## Troubleshooting
 
-### Connection Issues
-
 If you encounter connection issues:
-
-1. **Verify HTTP password**: Check that your Gerrit HTTP password is correctly set in `.env`
-2. **Check GERRIT_HOST**: Ensure the hostname is correct (without `https://`)
-3. **Test connection**: Use curl to test your credentials:
+1. Verify your HTTP password is correctly set in `GERRIT_HTTP_PASSWORD`
+2. Check `GERRIT_HOST` setting (hostname only, without https://)
+3. Ensure HTTPS access is enabled on Gerrit server
+4. Test connection using curl with the `/a/` prefix for authenticated API calls:
    ```bash
-   curl -u "username:http-password" https://your-gerrit-host/a/changes/
+   curl -u "your-username:your-http-password" https://your-gerrit-server.com/a/changes/?q=status:open
    ```
-4. **Verify permissions**: Ensure your Gerrit account has access to the projects you want to review
+5. Verify Gerrit access permissions for your account
 
-### Docker Issues
+### HTTP Credentials Authentication Issues
 
-If the Docker image is not found:
-```bash
-cd /home/atmp/data/dev-tools-1/mcp/gerrit
-docker build -t gerrit-code-review-mcp .
-```
+If you're having trouble with authentication, check your Gerrit config for `gitBasicAuthPolicy = HTTP` (or `HTTP_LDAP`).
 
-### Environment File Missing
+## License
 
-If you get an error about missing `.env` file:
-```bash
-cp .env.template .env
-# Then edit .env with your actual Gerrit settings
-```
+This project is licensed under the MIT License.
 
-## File Structure
+## Contributing
 
-```
-mcp/gerrit/
-├── README.md              # This file
-├── config.json           # MCP server configuration
-├── .env.template         # Environment variables template
-├── start-server.sh       # Startup script
-├── server.py            # Main MCP server code
-├── requirements.txt     # Python dependencies
-├── Dockerfile          # Docker configuration
-└── pyproject.toml      # Python project configuration
-```
+We welcome contributions! Please:
 
-## Technical Details
-
-- **Language**: Python 3.11
-- **Framework**: FastMCP (Model Context Protocol)
-- **Container**: Docker-based deployment
-- **Authentication**: HTTP Digest Auth with Gerrit
-- **API**: Gerrit REST API integration
-
-## Security Notes
-
-- The `.env` file contains sensitive credentials - never commit it to version control
-- HTTP passwords should be generated specifically for API access
-- The MCP server runs in an isolated Docker container
-- All communication with Gerrit uses HTTPS encryption
-
-## Support
-
-For issues specific to this installation, check:
-1. Docker container logs: `docker logs <container-id>`
-2. Gerrit server connectivity
-3. Environment variable configuration
-4. Gerrit account permissions
-
-For upstream issues, refer to the original repository:
-https://github.com/cayirtepeomer/gerrit-code-review-mcp
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
