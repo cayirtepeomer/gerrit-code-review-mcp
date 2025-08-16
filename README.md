@@ -96,10 +96,10 @@ pip install -e .
 
 1. Set up environment variables:
 ```bash
-export GERRIT_HOST="gerrit.example.com"  # Your Gerrit server hostname
-export GERRIT_USER="your-username"       # Your Gerrit username
-export GERRIT_HTTP_PASSWORD="your-http-password"  # Your Gerrit HTTP password
-export GERRIT_EXCLUDED_PATTERNS="\.pbxproj$,\.xcworkspace$,node_modules/"  # Optional: files to exclude
+export GERRIT_HOST="gerrit.example.com"  # Your Gerrit server hostname (without https://)
+export GERRIT_USER="your-username"       # Your Gerrit account username
+export GERRIT_HTTP_PASSWORD="your-http-password"  # Generated HTTP password from Gerrit Settings > HTTP Credentials
+export GERRIT_EXCLUDED_PATTERNS="\.pbxproj$,\.xcworkspace$,node_modules/"  # Optional: regex patterns for files to exclude from reviews
 ```
 
 Or create a `.env` file:
@@ -124,7 +124,7 @@ GERRIT_EXCLUDED_PATTERNS=\.pbxproj$,\.xcworkspace$,node_modules/
 
 ## MCP Configuration
 
-To use this MCP server with Cursor, you need to add its configuration to your `~/.cursor/mcp.json` file. Here's the required configuration:
+To use this MCP server with Cursor or RooCode, you need to add its configuration to your `~/.cursor/mcp.json` or `.roo/mcp.json` file. Here's the required configuration:
 
 ```json
 {
@@ -168,14 +168,18 @@ The server uses Gerrit REST API to interact with Gerrit, providing:
 ## Troubleshooting
 
 If you encounter connection issues:
-1. Verify your HTTP password is correctly set
-2. Check GERRIT_HOST setting
+1. Verify your HTTP password is correctly set in `GERRIT_HTTP_PASSWORD`
+2. Check `GERRIT_HOST` setting (hostname only, without https://)
 3. Ensure HTTPS access is enabled on Gerrit server
-4. Test connection using curl:
+4. Test connection using curl with the `/a/` prefix for authenticated API calls:
    ```bash
-   curl -u "username:http-password" https://your-gerrit-host/a/changes/
+   curl -u "your-username:your-http-password" https://your-gerrit-server.com/a/changes/?q=status:open
    ```
 5. Verify Gerrit access permissions for your account
+
+### HTTP Credentials Authentication Issues
+
+If you're having trouble with authentication, check your Gerrit config for `gitBasicAuthPolicy = HTTP` (or `HTTP_LDAP`).
 
 ## License
 

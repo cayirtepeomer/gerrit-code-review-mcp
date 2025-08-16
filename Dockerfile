@@ -8,7 +8,7 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Copy project files
-COPY pyproject.toml requirements.txt server.py ./
+COPY pyproject.toml requirements.txt server.py config.py README.md ./
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt

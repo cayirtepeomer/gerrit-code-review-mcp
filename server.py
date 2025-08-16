@@ -12,6 +12,8 @@ import requests
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP, Context
 
+from config import create_auth_handler, get_password
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -38,17 +40,18 @@ def make_gerrit_rest_request(ctx: Context, endpoint: str) -> Dict[str, Any]:
         endpoint = f'a/{endpoint}'
     
     url = f"https://{gerrit_ctx.host}/{endpoint}"
-    auth = requests.auth.HTTPDigestAuth(gerrit_ctx.user, gerrit_ctx.http_password)
+    
+    auth = create_auth_handler(gerrit_ctx.user, gerrit_ctx.http_password)
     
     try:
         headers = {
             'Accept': 'application/json',
             'User-Agent': 'GerritReviewMCP/1.0'
         }
+        
         response = requests.get(url, auth=auth, headers=headers, verify=True)
         
         if response.status_code == 401:
-            logger.error("Authentication failed. Check your credentials.")
             raise Exception("Authentication failed. Please check your Gerrit HTTP password in your account settings.")
             
         response.raise_for_status()
@@ -70,12 +73,16 @@ def make_gerrit_rest_request(ctx: Context, endpoint: str) -> Dict[str, Any]:
             logger.error(f"Response status: {e.response.status_code}")
         raise Exception(f"Failed to make Gerrit REST API request: {str(e)}")
 
+
 @asynccontextmanager
 async def gerrit_lifespan(server: FastMCP) -> AsyncIterator[GerritContext]:
     """Manage Gerrit connection details"""
     host = os.getenv("GERRIT_HOST", "")
     user = os.getenv("GERRIT_USER", "")
-    http_password = os.getenv("GERRIT_HTTP_PASSWORD", "")
+    
+    # Log simple error if user includes protocol in GERRIT_HOST
+    if host.startswith(('http://', 'https://')):
+        logger.error("GERRIT_HOST should not include protocol (http:// or https://). Use hostname only.")
     
     if not all([host, user]):
         logger.error("Missing required environment variables:")
@@ -86,19 +93,23 @@ async def gerrit_lifespan(server: FastMCP) -> AsyncIterator[GerritContext]:
             "Please set these in your environment or .env file."
         )
 
-    if not http_password:
-        logger.warning("GERRIT_HTTP_PASSWORD not set - REST API calls will fail")
-    
-    ctx = GerritContext(host=host, user=user, http_password=http_password)
+    # Get the appropriate password based on authentication method
+    try:
+        password = get_password()
+    except ValueError as e:
+        logger.error(f"Password configuration error: {str(e)}")
+        raise
+
+    ctx = GerritContext(host=host, user=user, http_password=password)
     try:
         yield ctx
     finally:
         pass
 
+
 # Create MCP server
 mcp = FastMCP(
     "Gerrit Review",
-    description="MCP server for reviewing Gerrit changes",
     lifespan=gerrit_lifespan,
     dependencies=["python-dotenv", "requests"]
 )
@@ -216,6 +227,7 @@ def fetch_gerrit_change(ctx: Context, change_id: str, patchset_number: str = Non
     
     return result
 
+
 @mcp.tool()
 def fetch_patchset_diff(ctx: Context, change_id: str, base_patchset: str, target_patchset: str, file_path: Optional[str] = None) -> Dict[str, Any]:
     """
@@ -295,4 +307,4 @@ if __name__ == "__main__":
         mcp.run(transport='stdio')
     except Exception as e:
         logger.error(f"Failed to start MCP server: {str(e)}")
-        raise 
+        raise
