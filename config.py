@@ -21,8 +21,14 @@ from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 
 # Version check for requests library
 try:
-    import pkg_resources
-    requests_version = pkg_resources.get_distribution("requests").version
+    # Use modern importlib.metadata instead of deprecated pkg_resources
+    try:
+        from importlib.metadata import version
+    except ImportError:
+        # Fallback for Python < 3.8
+        from importlib_metadata import version
+    
+    requests_version = version("requests")
     major, minor, patch = map(int, requests_version.split('.')[:3])
     if major < 2 or (major == 2 and minor < 31):
         raise ImportError(
@@ -30,7 +36,7 @@ try:
             "Please upgrade to requests>=2.31.0 for latest security patches:\n"
             "  pip install --upgrade 'requests>=2.31.0'"
         )
-except (ImportError, pkg_resources.DistributionNotFound) as e:
+except (ImportError, Exception) as e:
     if "requests" in str(e):
         print(f"Warning: Could not verify requests version: {e}", file=sys.stderr)
 

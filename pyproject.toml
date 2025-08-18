@@ -36,6 +36,31 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["."]
+exclude = [
+    "tests/",
+    ".changeset/",
+    ".env*",
+    ".git*",
+    "*.md",
+    "Dockerfile",
+    "smithery.yaml",
+    "uv.lock"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",
+]
+markers = [
+    "integration: marks tests as integration tests",
+    "docker: marks tests that require Docker",
+]
 
 [tool.black]
 line-length = 88
