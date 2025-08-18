@@ -115,13 +115,14 @@ mcp = FastMCP(
 )
 
 @mcp.tool()
-def fetch_gerrit_change(ctx: Context, change_id: str, patchset_number: str = None) -> Dict[str, Any]:
+def fetch_gerrit_change(ctx: Context, change_id: str, patchset_number: Optional[str] = None, include_comments: bool = True) -> Dict[str, Any]:
     """
     Fetch a Gerrit change and its contents.
     
     Args:
         change_id: The Gerrit change ID to fetch
         patchset_number: Optional patchset number to fetch (defaults to latest)
+        include_comments: Optional boolean to include inline comments (defaults to True)
     Returns:
         Dict containing the raw change information including files and diffs
     """
@@ -212,13 +213,24 @@ def fetch_gerrit_change(ctx: Context, change_id: str, patchset_number: str = Non
         }
         processed_files.append(file_data)
     
+    # Fetch inline comments for the target revision (if requested)
+    inline_comments = {}
+    if include_comments:
+        try:
+            comments_endpoint = f"a/changes/{change_id}/revisions/{target_revision}/comments"
+            inline_comments = make_gerrit_rest_request(ctx, comments_endpoint)
+        except Exception as e:
+            logger.warning(f"Failed to fetch inline comments for change {change_id}: {str(e)}")
+            inline_comments = {}
+    
     # Return the complete change information
     result = {
         "change_info": change_info,
         "project": project,
         "revision": target_revision,
         "patchset": revision_info,
-        "files": processed_files
+        "files": processed_files,
+        "inline_comments": inline_comments
     }
     
     if excluded_files:
