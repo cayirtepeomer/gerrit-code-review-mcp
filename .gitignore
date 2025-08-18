@@ -42,6 +42,8 @@ Thumbs.db
 
 # Testing
 .pytest_cache/
+.coverage
+htmlcov/
 
 # AI Assistant Rules (Roo Code, etc.)
 .roo/

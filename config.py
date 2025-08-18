@@ -23,22 +23,25 @@ from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 try:
     # Use modern importlib.metadata instead of deprecated pkg_resources
     try:
-        from importlib.metadata import version
+        from importlib.metadata import version as _dist_version
     except ImportError:
         # Fallback for Python < 3.8
-        from importlib_metadata import version
+        from importlib_metadata import version as _dist_version
     
-    requests_version = version("requests")
-    major, minor, patch = map(int, requests_version.split('.')[:3])
-    if major < 2 or (major == 2 and minor < 31):
+    requests_version = _dist_version("requests")
+    min_required = "2.31.0"
+    
+    # Use regex-based parsing for robustness with PEP 440 versions
+    version_match = re.match(r'^(\d+)\.(\d+)\.(\d+)', requests_version)
+    if not version_match or tuple(map(int, version_match.groups())) < (2, 31, 0):
         raise ImportError(
             f"requests library version {requests_version} is too old. "
-            "Please upgrade to requests>=2.31.0 for latest security patches:\n"
-            "  pip install --upgrade 'requests>=2.31.0'"
+            f"Please upgrade to requests>={min_required} for latest security patches:\n"
+            f"  pip install --upgrade 'requests>={min_required}'"
         )
-except (ImportError, Exception) as e:
-    if "requests" in str(e):
-        print(f"Warning: Could not verify requests version: {e}", file=sys.stderr)
+except Exception as e:
+    # Always warn; do not silently skip version verification
+    print(f"Warning: Could not verify requests version: {e}", file=sys.stderr)
 
 # Valid authentication methods
 VALID_AUTH_METHODS = ['digest', 'basic']

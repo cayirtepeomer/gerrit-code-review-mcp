@@ -17,8 +17,14 @@ from testcontainers.core.docker_client import DockerClient
 from testcontainers.core.waiting_utils import wait_for_logs
 
 # Skip tests if Docker is not available
+try:
+    DockerClient().client.ping()
+    _docker_available = True
+except Exception:
+    _docker_available = False
+
 pytestmark = pytest.mark.skipif(
-    not (os.getenv("DOCKER_HOST") or os.path.exists("/var/run/docker.sock")),
+    not _docker_available,
     reason="Docker daemon not available",
 )
 
@@ -79,7 +85,7 @@ def gerrit_mcp_container(project_root: Path, test_env_file: str) -> Generator[Do
                 line = line.strip()
                 if line and not line.startswith('#') and '=' in line:
                     key, value = line.split('=', 1)
-                    container = container.with_env(key, value)
+                    container.with_env(key, value)
         
         # Start the container
         with container:
@@ -130,7 +136,8 @@ class TestDockerIntegrationTestcontainers:
     def test_container_environment_variables(self, gerrit_mcp_container: DockerContainer):
         """Test that environment variables are properly set in the container"""
         # Execute a command to check environment variables
-        result = gerrit_mcp_container.exec("env")
+        result = gerrit_mcp_container.exec(["env"])
+        assert result.exit_code == 0
         env_output = result.output.decode('utf-8')
         
         # Check that our test environment variables are present
@@ -141,40 +148,53 @@ class TestDockerIntegrationTestcontainers:
     def test_container_python_environment(self, gerrit_mcp_container: DockerContainer):
         """Test that Python environment is properly configured"""
         # Check Python version
-        result = gerrit_mcp_container.exec("python --version")
+        result = gerrit_mcp_container.exec(["python", "--version"])
+        assert result.exit_code == 0
         python_version = result.output.decode('utf-8').strip()
         assert "Python 3." in python_version
         
         # Check that required packages are installed
-        # Try multiple approaches to get package list
-        result = gerrit_mcp_container.exec("pip list --format=freeze")
-        pip_output = result.output.decode('utf-8')
+        # Try to get package list with pip
+        try:
+            result = gerrit_mcp_container.exec(["pip", "list", "--format=freeze"])
+            pip_output = result.output.decode('utf-8')
+            
+            # Check if we got useful output from pip, regardless of exit code
+            if pip_output.strip():
+                # Check for key dependencies in pip output
+                pip_lower = pip_output.lower()
+                assert "mcp" in pip_lower
+                assert "requests" in pip_lower
+                assert "python-dotenv" in pip_lower
+                return  # Success, no need to try import tests
+        except Exception:
+            # If pip command fails completely, fall back to import tests
+            pass
         
-        # If pip list fails, try checking imports directly
-        if not pip_output.strip():
-            # Test that key packages can be imported
-            result = gerrit_mcp_container.exec("python -c 'import mcp; print(\"mcp imported successfully\")'")
+        # Fallback: Test that key packages can be imported
+        try:
+            result = gerrit_mcp_container.exec(["python", "-c", 'import mcp; print("mcp imported successfully")'])
+            assert result.exit_code == 0
             mcp_test = result.output.decode('utf-8')
             assert "mcp imported successfully" in mcp_test
             
-            result = gerrit_mcp_container.exec("python -c 'import requests; print(\"requests imported successfully\")'")
+            result = gerrit_mcp_container.exec(["python", "-c", 'import requests; print("requests imported successfully")'])
+            assert result.exit_code == 0
             requests_test = result.output.decode('utf-8')
             assert "requests imported successfully" in requests_test
             
-            result = gerrit_mcp_container.exec("python -c 'import dotenv; print(\"python-dotenv imported successfully\")'")
+            result = gerrit_mcp_container.exec(["python", "-c", 'import dotenv; print("python-dotenv imported successfully")'])
+            assert result.exit_code == 0
             dotenv_test = result.output.decode('utf-8')
             assert "python-dotenv imported successfully" in dotenv_test
-        else:
-            # Check for key dependencies in pip output
-            pip_lower = pip_output.lower()
-            assert "mcp" in pip_lower
-            assert "requests" in pip_lower
-            assert "python-dotenv" in pip_lower
+        except Exception as e:
+            pytest.fail(f"Could not verify Python packages installation: {e}")
 
     def test_container_file_structure(self, gerrit_mcp_container: DockerContainer):
         """Test that container has the expected file structure"""
         # Check that main files are present
-        result = gerrit_mcp_container.exec("ls -la /app/")
+        result = gerrit_mcp_container.exec(["ls", "-la", "/app/"])
+        assert result.exit_code == 0
         file_list = result.output.decode('utf-8')
         
         # Required files that must be present
@@ -183,7 +203,6 @@ class TestDockerIntegrationTestcontainers:
             assert expected_file in file_list, f"Expected file {expected_file} not found in container"
         
         # Optional files (requirements.txt may not exist in PEP 621 builds)
-        optional_files = ["requirements.txt"]
         # We don't assert on optional files, just check they exist if present
 
     def test_container_interactive_mode_simulation(self, project_root: Path, test_env_file: str):
@@ -209,7 +228,7 @@ class TestDockerIntegrationTestcontainers:
                     line = line.strip()
                     if line and not line.startswith('#') and '=' in line:
                         key, value = line.split('=', 1)
-                        container = container.with_env(key, value)
+                        container.with_env(key, value)
             
             with container:
                 # Wait for startup with configurable timeout
