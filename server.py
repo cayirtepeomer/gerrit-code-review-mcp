@@ -115,14 +115,14 @@ mcp = FastMCP(
 )
 
 @mcp.tool()
-def fetch_gerrit_change(ctx: Context, change_id: str, patchset_number: Optional[str] = None, include_comments: bool = True) -> Dict[str, Any]:
+def fetch_gerrit_change(ctx: Context, change_id: str, patchset_number: Optional[str] = None, include_comments: bool = False) -> Dict[str, Any]:
     """
     Fetch a Gerrit change and its contents.
     
     Args:
         change_id: The Gerrit change ID to fetch
         patchset_number: Optional patchset number to fetch (defaults to latest)
-        include_comments: Optional boolean to include inline comments (defaults to True)
+        include_comments: Optional boolean to include inline comments (defaults to False)
     Returns:
         Dict containing the raw change information including files and diffs
     """

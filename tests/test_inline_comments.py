@@ -124,8 +124,8 @@ class TestInlineComments:
             sample_inline_comments  # Third call for inline comments
         ]
 
-        # Call the function directly
-        result = fetch_gerrit_change(mock_context, "12345")
+        # Call the function directly with comments enabled
+        result = fetch_gerrit_change(mock_context, "12345", include_comments=True)
 
         # Verify the result structure
         assert "change_info" in result
@@ -172,6 +172,37 @@ class TestInlineComments:
         assert not comments_call_found, "Comments API should NOT have been called"
 
     @patch('server.make_gerrit_rest_request')
+    def test_fetch_change_default_behavior_no_comments(
+        self,
+        mock_request,
+        mock_context,
+        sample_change_info,
+        sample_diff_info
+    ):
+        """Test that the default behavior is to NOT include comments."""
+        # Mock the API responses - only change info and diff, no comments call
+        mock_request.side_effect = [
+            sample_change_info,  # First call for change info
+            sample_diff_info     # Second call for file diff
+        ]
+
+        # Call the function with default parameters (should not include comments)
+        result = fetch_gerrit_change(mock_context, "12345")
+
+        # Verify the result structure - should have empty inline_comments
+        assert "change_info" in result
+        assert "inline_comments" in result
+        assert result["inline_comments"] == {}
+        
+        # Verify comments API was NOT called
+        comments_call_found = False
+        for call in mock_request.call_args_list:
+            if "comments" in call[0][1]:
+                comments_call_found = True
+                break
+        assert not comments_call_found, "Comments API should NOT have been called by default"
+
+    @patch('server.make_gerrit_rest_request')
     def test_fetch_change_with_comments_enabled_explicitly(
         self,
         mock_request,
@@ -216,8 +247,8 @@ class TestInlineComments:
 
         mock_request.side_effect = side_effect
 
-        # Call the function - should not raise exception
-        result = fetch_gerrit_change(mock_context, "12345")
+        # Call the function with comments enabled - should not raise exception
+        result = fetch_gerrit_change(mock_context, "12345", include_comments=True)
 
         # Verify the result structure - should have empty inline_comments
         assert "change_info" in result
@@ -246,8 +277,8 @@ class TestInlineComments:
 
         mock_request.side_effect = side_effect
 
-        # Call the function
-        fetch_gerrit_change(mock_context, "12345")
+        # Call the function with comments enabled
+        fetch_gerrit_change(mock_context, "12345", include_comments=True)
 
         # Verify that a warning was logged
         mock_logger.warning.assert_called_once()
@@ -413,8 +444,8 @@ class TestInlineCommentsIntegration:
             real_world_comments
         ]
 
-        # Call the function
-        result = fetch_gerrit_change(mock_context, "12345")
+        # Call the function with comments enabled
+        result = fetch_gerrit_change(mock_context, "12345", include_comments=True)
 
         # Verify the result
         assert "inline_comments" in result
