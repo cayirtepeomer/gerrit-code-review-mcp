@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 from urllib.parse import quote
+from pathlib import Path
 import requests
 
 from dotenv import load_dotenv
@@ -26,6 +27,48 @@ class GerritContext:
     host: str
     user: str
     http_password: Optional[str] = None
+    verify_ssl: Union[bool, str] = True
+
+
+def resolve_ssl_verification_setting() -> Union[bool, str]:
+    """Resolve SSL verification behaviour based on environment configuration."""
+    ssl_verify_env = os.getenv("GERRIT_SSL_VERIFY")
+    ca_bundle_env = os.getenv("GERRIT_CA_BUNDLE")
+
+    # Explicit CA bundle takes precedence when provided
+    if ca_bundle_env:
+        ca_bundle_clean = ca_bundle_env.strip()
+        if not ca_bundle_clean:
+            raise ValueError(
+                "GERRIT_CA_BUNDLE is set but empty after trimming whitespace. "
+                "Please provide a valid certificate bundle path or unset the variable."
+            )
+        ca_path = Path(ca_bundle_clean).expanduser()
+        if not (ca_path.exists() and ca_path.is_file()):
+            raise ValueError(
+                f"Configured GERRIT_CA_BUNDLE path '{ca_path}' does not exist. "
+                "Please provide a valid certificate bundle path or unset the variable."
+            )
+        return str(ca_path)
+
+    if ssl_verify_env is None:
+        return True
+
+    normalized_value = ssl_verify_env.strip().lower()
+    if normalized_value in {"1", "true", "yes", "on"}:
+        return True
+    if normalized_value in {"0", "false", "no", "off"}:
+        logger.warning("TLS verification disabled via GERRIT_SSL_VERIFY. Use with caution.")
+        return False
+
+    # Allow specifying a direct CA bundle path via GERRIT_SSL_VERIFY
+    potential_path = Path(ssl_verify_env.strip()).expanduser()
+    if potential_path.exists() and potential_path.is_file():
+        return str(potential_path)
+
+    raise ValueError(
+        "Invalid GERRIT_SSL_VERIFY value. Provide true/false or a path to a CA bundle."
+    )
 
 def make_gerrit_rest_request(ctx: Context, endpoint: str) -> Dict[str, Any]:
     """Make a REST API request to Gerrit and handle the response"""
@@ -49,7 +92,7 @@ def make_gerrit_rest_request(ctx: Context, endpoint: str) -> Dict[str, Any]:
             'User-Agent': 'GerritReviewMCP/1.0'
         }
         
-        response = requests.get(url, auth=auth, headers=headers, verify=True)
+        response = requests.get(url, auth=auth, headers=headers, verify=gerrit_ctx.verify_ssl)
         
         if response.status_code == 401:
             raise Exception("Authentication failed. Please check your Gerrit HTTP password in your account settings.")
@@ -69,8 +112,9 @@ def make_gerrit_rest_request(ctx: Context, endpoint: str) -> Dict[str, Any]:
             
     except requests.exceptions.RequestException as e:
         logger.error(f"REST request failed: {str(e)}")
-        if hasattr(e, 'response'):
-            logger.error(f"Response status: {e.response.status_code}")
+        response = getattr(e, "response", None)
+        if response is not None:
+            logger.error(f"Response status: {response.status_code}")
         raise Exception(f"Failed to make Gerrit REST API request: {str(e)}")
 
 
@@ -82,7 +126,8 @@ async def gerrit_lifespan(server: FastMCP) -> AsyncIterator[GerritContext]:
     
     # Log simple error if user includes protocol in GERRIT_HOST
     if host.startswith(('http://', 'https://')):
-        logger.error("GERRIT_HOST should not include protocol (http:// or https://). Use hostname only.")
+        logger.warning("GERRIT_HOST should not include protocol; stripping scheme.")
+        host = re.sub(r'^https?://', '', host).rstrip('/')
     
     if not all([host, user]):
         logger.error("Missing required environment variables:")
@@ -100,7 +145,9 @@ async def gerrit_lifespan(server: FastMCP) -> AsyncIterator[GerritContext]:
         logger.error(f"Password configuration error: {str(e)}")
         raise
 
-    ctx = GerritContext(host=host, user=user, http_password=password)
+    verify_ssl = resolve_ssl_verification_setting()
+
+    ctx = GerritContext(host=host, user=user, http_password=password, verify_ssl=verify_ssl)
     try:
         yield ctx
     finally:

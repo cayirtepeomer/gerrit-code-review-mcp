@@ -100,6 +100,10 @@ export GERRIT_HOST="gerrit.example.com"  # Your Gerrit server hostname (without 
 export GERRIT_USER="your-username"       # Your Gerrit account username
 export GERRIT_HTTP_PASSWORD="your-http-password"  # Generated HTTP password from Gerrit Settings > HTTP Credentials
 export GERRIT_EXCLUDED_PATTERNS="\.pbxproj$,\.xcworkspace$,node_modules/"  # Optional: regex patterns for files to exclude from reviews
+# Optional TLS configuration for custom or self-signed certificates
+export GERRIT_SSL_VERIFY="true"              # Set to 'false' to skip TLS verification in constrained environments
+export GERRIT_CA_BUNDLE="/path/to/ca.pem"    # Optional custom CA bundle path used when verification stays enabled
+# Note: If both are set, GERRIT_CA_BUNDLE takes precedence and verification stays enabled using that bundle.
 ```
 
 Or create a `.env` file:
@@ -108,6 +112,9 @@ GERRIT_HOST=gerrit.example.com
 GERRIT_USER=your-username
 GERRIT_HTTP_PASSWORD=your-http-password
 GERRIT_EXCLUDED_PATTERNS=\.pbxproj$,\.xcworkspace$,node_modules/
+GERRIT_SSL_VERIFY=true
+GERRIT_CA_BUNDLE=/path/to/ca.pem
+# If both are set, the CA bundle wins.
 ```
 
 2. Generate HTTP password:
@@ -180,6 +187,12 @@ If you encounter connection issues:
 ### HTTP Credentials Authentication Issues
 
 If you're having trouble with authentication, check your Gerrit config for `gitBasicAuthPolicy = HTTP` (or `HTTP_LDAP`).
+
+### Working with Self-Signed Certificates
+
+- `GERRIT_SSL_VERIFY=false` disables TLS verification when Gerrit uses an internally issued certificate lacking required Subject Alternative Name (SAN) entries.
+- Provide a custom certificate bundle via `GERRIT_CA_BUNDLE=/path/to/ca.pem` to keep verification enabled while trusting a private CA.
+- Treat disabled verification as a temporary workaround until a certificate with matching SANs is issued for the Gerrit hostnames you access.
 
 ## License
 
