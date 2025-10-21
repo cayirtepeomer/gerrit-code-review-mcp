@@ -21,18 +21,36 @@ from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 
 # Version check for requests library
 try:
-    import pkg_resources
-    requests_version = pkg_resources.get_distribution("requests").version
-    major, minor, patch = map(int, requests_version.split('.')[:3])
-    if major < 2 or (major == 2 and minor < 31):
-        raise ImportError(
-            f"requests library version {requests_version} is too old. "
-            "Please upgrade to requests>=2.31.0 for latest security patches:\n"
-            "  pip install --upgrade 'requests>=2.31.0'"
-        )
-except (ImportError, pkg_resources.DistributionNotFound) as e:
-    if "requests" in str(e):
-        print(f"Warning: Could not verify requests version: {e}", file=sys.stderr)
+    # Use modern importlib.metadata (Python 3.10+ guaranteed)
+    from importlib.metadata import version as _dist_version
+    
+    requests_version = _dist_version("requests")
+    min_required = "2.31.0"
+    
+    # Prefer robust PEP 440 comparison via packaging, with numeric-prefix fallback
+    try:
+        from packaging.version import Version as _Version
+    except Exception:
+        _Version = None  # type: ignore
+
+    if _Version:
+        if _Version(requests_version) < _Version(min_required):
+            raise ImportError(
+                f"requests library version {requests_version} is too old. "
+                f"Please upgrade to requests>={min_required} for latest security patches:\n"
+                f"  pip install --upgrade 'requests>={min_required}'"
+            )
+    else:
+        version_match = re.match(r'^\s*(\d+)\.(\d+)\.(\d+)', requests_version)
+        if not version_match or tuple(map(int, version_match.groups())) < (2, 31, 0):
+            raise ImportError(
+                f"requests library version {requests_version} is too old. "
+                f"Please upgrade to requests>={min_required} for latest security patches:\n"
+                f"  pip install --upgrade 'requests>={min_required}'"
+            )
+except Exception as e:
+    # Always warn; do not silently skip version verification
+    logging.warning("Could not verify requests version: %s", e)
 
 # Valid authentication methods
 VALID_AUTH_METHODS = ['digest', 'basic']

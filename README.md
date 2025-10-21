@@ -226,6 +226,60 @@ If you're having trouble with authentication, check your Gerrit config for `gitB
 
 This project is licensed under the MIT License.
 
+## Testing
+
+This project includes comprehensive Docker integration tests using testcontainers-python for reliable cross-platform testing.
+
+### Running Tests
+
+To run the full test suite:
+```bash
+# Install development dependencies
+pip install -e ".[dev]"
+
+# Run all tests
+pytest
+
+# Run only integration tests
+pytest -m integration
+
+# Run with verbose output
+pytest -v
+
+# Run with coverage
+pytest --cov=. --cov-report=html
+```
+
+### Test Environment Variables
+
+The following environment variables can be used to configure test behavior:
+
+- `TEST_STARTUP_TIMEOUT`: Container startup timeout in seconds (default: 30)
+- `TEST_LOGS_SETTLE_DELAY`: Delay before checking logs in seconds (default: 0)
+- `DOCKER_HOST`: Docker daemon host for remote Docker (optional)
+
+Example:
+```bash
+# Run tests with custom timeouts
+TEST_STARTUP_TIMEOUT=60 TEST_LOGS_SETTLE_DELAY=1 pytest tests/test_docker_integration.py -v
+```
+
+### Docker Requirements
+
+Docker integration tests require:
+- Docker daemon running and accessible
+- Docker socket available at `/var/run/docker.sock` (Linux/macOS) or `DOCKER_HOST` set
+- Sufficient permissions to build and run containers
+
+Tests will be automatically skipped if Docker is not available.
+
+### CI/CD Integration
+
+For CI/CD environments, ensure:
+- Docker-in-Docker (DinD) service is available
+- Docker socket is mounted or `DOCKER_HOST` is configured
+- Sufficient timeout values are set for slower environments
+
 ## Contributing
 
 We welcome contributions! Please:
@@ -233,4 +287,5 @@ We welcome contributions! Please:
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Submit a pull request
+4. Run the test suite to ensure everything works
+5. Submit a pull request
