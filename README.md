@@ -32,12 +32,40 @@ fetch_patchset_diff(change_id: str, base_patchset: str, target_patchset: str, fi
 - Analyze code modifications across patchset versions
 - Track evolution of changes through review iterations
 
+### Submit Review Feedback
+```python
+submit_gerrit_review(
+    change_id: str,
+    message: Optional[str] = None,
+    patchset_number: Optional[str] = None,
+    labels: Optional[Dict[str, int]] = None,
+    comments: Optional[List[Dict[str, Any]]] = None,
+    notify: str = "OWNER",
+)
+```
+- Post summary feedback, vote labels (e.g., `{"Code-Review": 1}`), and inline/file-level comments
+- Target a specific patchset or default to the latest revision
+- Control Gerrit's notification behaviour (`notify`: `NONE`, `OWNER`, `OWNER_REVIEWERS`, `ALL`)
+- Comment payloads accept dictionaries with `path`, `message`, and optional Gerrit comment fields (`line`, `side`, `range`, ...)
+
 ### Example Usage
 
 Review a complete change:
 ```python
 # Fetch latest patchset of change 23824
 change = fetch_gerrit_change("23824")
+```
+
+Submit review feedback with a vote and inline comment:
+```python
+submit_gerrit_review(
+    change_id="23824",
+    message="Looks good overall",
+    labels={"Code-Review": 1},
+    comments=[{"path": "src/app.py", "line": 42, "message": "Nice refactor."}],
+    patchset_number="2",           # optional: target a specific patchset
+    notify="OWNER_REVIEWERS",      # optional: adjust notification scope
+)
 ```
 
 Compare specific patchsets:

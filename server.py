@@ -2,7 +2,7 @@ import os
 import json
 import logging
 import re
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, List
 from dataclasses import dataclass
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
@@ -18,6 +18,8 @@ from config import create_auth_handler, get_password
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+DEFAULT_REQUEST_TIMEOUT = 30
 
 # Load environment variables
 load_dotenv()
@@ -70,7 +72,53 @@ def resolve_ssl_verification_setting() -> Union[bool, str]:
         "Invalid GERRIT_SSL_VERIFY value. Provide true/false or a path to a CA bundle."
     )
 
-def make_gerrit_rest_request(ctx: Context, endpoint: str) -> Dict[str, Any]:
+def build_review_comments(comments: Optional[List[Dict[str, Any]]]) -> Dict[str, List[Dict[str, Any]]]:
+    """Convert a flat comment definition list into Gerrit's review payload structure."""
+    if not comments:
+        return {}
+
+    comment_map: Dict[str, List[Dict[str, Any]]] = {}
+
+    for index, comment in enumerate(comments, start=1):
+        if not isinstance(comment, dict):
+            raise ValueError(
+                f"Comment entry #{index} must be a mapping with 'path' and 'message' keys."
+            )
+
+        path = comment.get("path")
+        message = comment.get("message")
+
+        if not path or not isinstance(path, str):
+            raise ValueError(f"Comment entry #{index} is missing a valid 'path' value.")
+        if not message or not isinstance(message, str):
+            raise ValueError(f"Comment entry #{index} is missing a valid 'message'.")
+
+        # Remove path key but keep the remaining fields for Gerrit
+        payload_comment = {k: v for k, v in comment.items() if k != "path" and v is not None}
+        line_value = payload_comment.get("line")
+        if line_value is not None and (not isinstance(line_value, int) or line_value <= 0):
+            raise ValueError(
+                f"Comment entry #{index} has invalid 'line' value; must be a positive integer."
+            )
+        range_value = payload_comment.get("range")
+        if range_value is not None and not isinstance(range_value, dict):
+            raise ValueError(
+                f"Comment entry #{index} has invalid 'range' value; must be a mapping."
+            )
+        payload_comment.setdefault("message", message)
+
+        comment_map.setdefault(path, []).append(payload_comment)
+
+    return comment_map
+
+def make_gerrit_rest_request(
+    ctx: Context,
+    endpoint: str,
+    *,
+    method: str = "GET",
+    params: Optional[Dict[str, Any]] = None,
+    json_payload: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Make a REST API request to Gerrit and handle the response"""
     gerrit_ctx = ctx.request_context.lifespan_context
     
@@ -91,8 +139,17 @@ def make_gerrit_rest_request(ctx: Context, endpoint: str) -> Dict[str, Any]:
             'Accept': 'application/json',
             'User-Agent': 'GerritReviewMCP/1.0'
         }
-        
-        response = requests.get(url, auth=auth, headers=headers, verify=gerrit_ctx.verify_ssl)
+
+        response = requests.request(
+            method,
+            url,
+            auth=auth,
+            headers=headers,
+            params=params,
+            json=json_payload,
+            verify=gerrit_ctx.verify_ssl,
+            timeout=DEFAULT_REQUEST_TIMEOUT,
+        )
         
         if response.status_code == 401:
             raise Exception("Authentication failed. Please check your Gerrit HTTP password in your account settings.")
@@ -103,6 +160,9 @@ def make_gerrit_rest_request(ctx: Context, endpoint: str) -> Dict[str, Any]:
         content = response.text
         if content.startswith(")]}'"):
             content = content[4:]
+        content = content.strip()
+        if not content:
+            return {}
             
         try:
             return json.loads(content)
@@ -357,6 +417,70 @@ def fetch_patchset_diff(ctx: Context, change_id: str, base_patchset: str, target
         "base_patchset": base_patchset,
         "target_patchset": target_patchset,
         "files": changed_files
+    }
+
+
+@mcp.tool()
+def submit_gerrit_review(
+    ctx: Context,
+    change_id: str,
+    message: Optional[str] = None,
+    patchset_number: Optional[str] = None,
+    labels: Optional[Dict[str, int]] = None,
+    comments: Optional[List[Dict[str, Any]]] = None,
+    notify: str = "OWNER",
+) -> Dict[str, Any]:
+    """Submit a review message (and optional votes/comments) to Gerrit."""
+
+    if not any([message, labels, comments]):
+        raise ValueError("Review submission requires at least one of message, labels, or comments.")
+
+    change_endpoint = "a/changes/{change_id}/detail?o=ALL_REVISIONS".format(change_id=change_id)
+    change_info = make_gerrit_rest_request(ctx, change_endpoint)
+
+    revisions = change_info.get("revisions", {})
+    current_revision = change_info.get("current_revision")
+
+    target_revision = None
+    if patchset_number:
+        for revision_hash, info in revisions.items():
+            if str(info.get("_number")) == str(patchset_number):
+                target_revision = revision_hash
+                break
+        if not target_revision:
+            available = sorted(str(info.get("_number")) for info in revisions.values())
+            raise ValueError(
+                f"Patchset {patchset_number} not found. Available patchsets: {', '.join(available)}"
+            )
+    else:
+        target_revision = current_revision
+
+    if not target_revision:
+        raise ValueError("Unable to determine target revision for review submission.")
+
+    payload: Dict[str, Any] = {"notify": notify}
+
+    if message:
+        payload["message"] = message
+    if labels:
+        payload["labels"] = labels
+
+    structured_comments = build_review_comments(comments)
+    if structured_comments:
+        payload["comments"] = structured_comments
+
+    review_endpoint = f"a/changes/{change_id}/revisions/{target_revision}/review"
+    response = make_gerrit_rest_request(
+        ctx,
+        review_endpoint,
+        method="POST",
+        json_payload=payload,
+    )
+
+    return {
+        "change_id": change_id,
+        "revision": target_revision,
+        "submitted": response,
     }
 
 if __name__ == "__main__":
